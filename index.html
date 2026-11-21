@@ -125,10 +125,11 @@
           : `<div class="no-img">No photos attached</div>`;
 
         const isSold = p.status === "Sold";
+        const targetWa = (p.ownerWhatsapp && String(p.ownerWhatsapp).trim()) || WHATSAPP_NUMBER;
         const msg = encodeURIComponent(
-          `Hi Rachid, I'm interested in: ${p.model} ($${p.price}) — Condition: ${p.condition || "N/A"}`
+          `Hi, I'm interested in: ${p.model} ($${p.price}) — Condition: ${p.condition || "N/A"}`
         );
-        const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`;
+        const waUrl = `https://wa.me/${targetWa}?text=${msg}`;
 
         return `
           <article class="card">
