@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phone Drop — Single-Unit Inventory</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --card-2: #20242e;
+      --text: #f3f5f8;
+      --muted: #9aa2b1;
+      --accent: #3b82f6;
+      --ok: #10b981;
+      --warn: #f59e0b;
+      --sold: #ef4444;
+      --border: #2a303d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; max-width: 1120px; margin: 0 auto; }
+    header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.5rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+    .admin-link { color: var(--muted); text-decoration: none; font-size: 0.85rem; border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; }
+    .admin-link:hover { color: var(--text); border-color: var(--accent); }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .filter-btn { background: var(--card); color: var(--text); border: 1px solid var(--border); padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: 0.88rem; }
+    .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .search-input { flex: 1; min-width: 200px; background: var(--card); color: var(--text); border: 1px solid var(--border); padding: 8px 14px; border-radius: 10px; font-size: 0.9rem; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 18px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+    .gallery { display: flex; gap: 6px; overflow-x: auto; padding: 10px; background: var(--card-2); scroll-snap-type: x mandatory; }
+    .gallery img { width: 100%; height: 210px; object-fit: cover; border-radius: 10px; flex: 0 0 100%; scroll-snap-align: start; }
+    .no-img { height: 210px; display: flex; align-items: center; justify-content: center; color: var(--muted); background: var(--card-2); font-size: 0.9rem; }
+
+    .body { padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+    .top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .title { font-size: 1.1rem; font-weight: 700; }
+    .price { font-size: 1.15rem; font-weight: 800; color: #60a5fa; white-space: nowrap; }
+
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+    .badge { font-size: 0.76rem; padding: 4px 9px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--border); color: var(--text); }
+    .status-available { border-color: rgba(16,185,129,0.5); color: #34d399; }
+    .status-reserved { border-color: rgba(245,158,11,0.5); color: #fbbf24; }
+    .status-sold { border-color: rgba(239,68,68,0.5); color: #f87171; }
+
+    .notes { color: var(--muted); font-size: 0.88rem; line-height: 1.45; white-space: pre-line; }
+    .actions { margin-top: auto; padding-top: 8px; }
+    .wa-btn { display: block; text-align: center; background: #16a34a; color: #fff; text-decoration: none; font-weight: 600; padding: 10px 14px; border-radius: 10px; font-size: 0.92rem; }
+    .wa-btn:hover { background: #15803d; }
+    .wa-btn.disabled { background: #2a303d; color: var(--muted); pointer-events: none; }
+    .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Available Phones</h1>
+      <p class="sub">Individual units with real photos, exact condition, and transparent pricing.</p>
+    </div>
+    <a class="admin-link" href="./admin.html">Admin Dashboard</a>
+  </header>
+
+  <div class="controls">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="New">New</button>
+    <button class="filter-btn" data-filter="Clean Used">Clean Used</button>
+    <button class="filter-btn" data-filter="Fair Used">Fair Used</button>
+    <button class="filter-btn" data-filter="Needs Work">Needs Work</button>
+    <input id="searchInput" class="search-input" type="text" placeholder="Search model, storage, battery..." />
+  </div>
+
+  <div id="grid" class="grid">
+    <p class="empty">Loading devices...</p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+    import { getFirestore, collection, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+    import { firebaseConfig, WHATSAPP_NUMBER } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const grid = document.getElementById("grid");
+    const searchInput = document.getElementById("searchInput");
+    const filterBtns = document.querySelectorAll(".filter-btn");
+
+    let allPhones = [];
+    let activeCondition = "all";
+
+    function statusClass(status) {
+      if (status === "Sold") return "status-sold";
+      if (status === "Reserved") return "status-reserved";
+      return "status-available";
+    }
+
+    function escapeHtml(str = "") {
+      return String(str).replace(/[&<>"']/g, m => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[m]));
+    }
+
+    function render() {
+      const term = searchInput.value.trim().toLowerCase();
+      const filtered = allPhones.filter(p => {
+        const matchCond = activeCondition === "all" || p.condition === activeCondition;
+        const text = `${p.model} ${p.specs || ""} ${p.notes || ""} ${p.condition || ""}`.toLowerCase();
+        const matchSearch = !term || text.includes(term);
+        return matchCond && matchSearch;
+      });
+
+      if (!filtered.length) {
+        grid.innerHTML = `<p class="empty">No matching phones right now.</p>`;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(p => {
+        const imgs = Array.isArray(p.photos) ? p.photos : [];
+        const galleryHtml = imgs.length
+          ? `<div class="gallery">${imgs.map(src => `<img src="${src}" alt="${escapeHtml(p.model)}" loading="lazy" />`).join("")}</div>`
+          : `<div class="no-img">No photos attached</div>`;
+
+        const isSold = p.status === "Sold";
+        const msg = encodeURIComponent(
+          `Hi Rachid, I'm interested in: ${p.model} ($${p.price}) — Condition: ${p.condition || "N/A"}`
+        );
+        const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`;
+
+        return `
+          <article class="card">
+            ${galleryHtml}
+            <div class="body">
+              <div class="top-row">
+                <div class="title">${escapeHtml(p.model)}</div>
+                <div class="price">$${escapeHtml(p.price)}</div>
+              </div>
+              <div class="badges">
+                <span class="badge ${statusClass(p.status)}">${escapeHtml(p.status || "Available")}</span>
+                ${p.condition ? `<span class="badge">${escapeHtml(p.condition)}</span>` : ""}
+                ${p.specs ? `<span class="badge">${escapeHtml(p.specs)}</span>` : ""}
+              </div>
+              ${p.notes ? `<p class="notes">${escapeHtml(p.notes)}</p>` : ""}
+              <div class="actions">
+                <a class="wa-btn ${isSold ? "disabled" : ""}" href="${isSold ? "#" : waUrl}" target="_blank" rel="noopener">
+                  ${isSold ? "Sold" : "Message on WhatsApp"}
+                </a>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        filterBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeCondition = btn.dataset.filter;
+        render();
+      });
+    });
+
+    searchInput.addEventListener("input", render);
+
+    const q = query(collection(db, "phones"), orderBy("createdAt", "desc"));
+    onSnapshot(q, snap => {
+      allPhones = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      render();
+    }, err => {
+      grid.innerHTML = `<p class="empty">Error loading inventory: ${escapeHtml(err.message)}</p>`;
+    });
+  </script>
+</body>
+</html>
