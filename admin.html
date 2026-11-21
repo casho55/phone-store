@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Phone Inventory</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --input: #11141a;
+      --text: #f3f5f8;
+      --muted: #9aa2b1;
+      --accent: #3b82f6;
+      --danger: #ef4444;
+      --border: #2a303d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; max-width: 860px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    a { color: #60a5fa; text-decoration: none; font-size: 0.9rem; }
+
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 20px; }
+    h2 { font-size: 1.1rem; margin-bottom: 14px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    label { font-size: 0.85rem; color: var(--muted); }
+    input, select, textarea { background: var(--input); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.92rem; }
+    textarea { min-height: 80px; resize: vertical; }
+
+    button { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+    button.secondary { background: #262c3a; color: var(--text); }
+    button.danger { background: var(--danger); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .preview-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .preview-row img { width: 76px; height: 76px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+
+    .item { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
+    .item-meta { font-size: 0.85rem; color: var(--muted); margin-top: 3px; }
+    .item-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .status-select { padding: 7px 10px; font-size: 0.84rem; }
+    .msg { margin-top: 10px; font-size: 0.88rem; color: #34d399; }
+    .err { color: #f87171; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Inventory Admin</h1>
+      <a href="./index.html">← View Storefront</a>
+    </div>
+    <button id="logoutBtn" class="secondary hidden">Log out</button>
+  </header>
+
+  <!-- Login Box -->
+  <section id="loginPanel" class="panel">
+    <h2>Sign In</h2>
+    <form id="loginForm">
+      <div class="field">
+        <label>Admin Email</label>
+        <input id="emailInput" type="email" value="rachiddhaybi852005@gmail.com" required />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input id="passwordInput" type="password" required />
+      </div>
+      <button type="submit">Sign In</button>
+      <p id="loginMsg" class="msg err"></p>
+    </form>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="dashPanel" class="hidden">
+    <div class="panel">
+      <h2>Add Phone Unit</h2>
+      <form id="addPhoneForm">
+        <div class="grid-2">
+          <div class="field">
+            <label>Model & Name (e.g. iPhone 12 Pro)</label>
+            <input id="modelInput" type="text" required placeholder="iPhone 12 Pro 128GB Pacific Blue" />
+          </div>
+          <div class="field">
+            <label>Price (USD)</label>
+            <input id="priceInput" type="number" step="0.01" required placeholder="320" />
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label>Condition</label>
+            <select id="conditionInput">
+              <option value="Clean Used">Clean Used</option>
+              <option value="New">New</option>
+              <option value="Fair Used">Fair Used</option>
+              <option value="Needs Work">Needs Work</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Quick Specs / Battery</label>
+            <input id="specsInput" type="text" placeholder="128GB • Battery 86% • Face ID OK" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Honest Notes / Issues / Repairs</label>
+          <textarea id="notesInput" placeholder="Small scuff on bottom-left frame, True Tone working, no parts replaced..."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Photos (up to 4 photos from phone/PC)</label>
+          <input id="photosInput" type="file" accept="image/*" multiple />
+          <div id="previewRow" class="preview-row"></div>
+        </div>
+
+        <button id="saveBtn" type="submit">Publish Phone</button>
+        <p id="addMsg" class="msg"></p>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Manage Units</h2>
+      <div id="adminList">Loading...</div>
+    </div>
+  </section>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+    import { firebaseConfig } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const loginPanel = document.getElementById("loginPanel");
+    const dashPanel = document.getElementById("dashPanel");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const loginForm = document.getElementById("loginForm");
+    const loginMsg = document.getElementById("loginMsg");
+
+    const addPhoneForm = document.getElementById("addPhoneForm");
+    const photosInput = document.getElementById("photosInput");
+    const previewRow = document.getElementById("previewRow");
+    const saveBtn = document.getElementById("saveBtn");
+    const addMsg = document.getElementById("addMsg");
+    const adminList = document.getElementById("adminList");
+
+    let compressedPhotos = [];
+
+    function compressImage(file, maxWidth = 800, quality = 0.72) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, maxWidth / img.width);
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL("image/jpeg", quality));
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    photosInput.addEventListener("change", async () => {
+      const files = Array.from(photosInput.files || []).slice(0, 4);
+      compressedPhotos = [];
+      previewRow.innerHTML = "";
+      for (const f of files) {
+        const dataUrl = await compressImage(f);
+        compressedPhotos.push(dataUrl);
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        previewRow.appendChild(img);
+      }
+    });
+
+    loginForm.addEventListener("submit", async e => {
+      e.preventDefault();
+      loginMsg.textContent = "";
+      try {
+        await signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
+      } catch (err) {
+        loginMsg.textContent = err.message;
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => signOut(auth));
+
+    addPhoneForm.addEventListener("submit", async e => {
+      e.preventDefault();
+      saveBtn.disabled = true;
+      addMsg.textContent = "Saving...";
+      addMsg.classList.remove("err");
+      try {
+        await addDoc(collection(db, "phones"), {
+          model: modelInput.value.trim(),
+          price: Number(priceInput.value),
+          condition: conditionInput.value,
+          specs: specsInput.value.trim(),
+          notes: notesInput.value.trim(),
+          status: "Available",
+          photos: compressedPhotos,
+          createdAt: serverTimestamp()
+        });
+        addPhoneForm.reset();
+        compressedPhotos = [];
+        previewRow.innerHTML = "";
+        addMsg.textContent = "Phone published!";
+      } catch (err) {
+        addMsg.textContent = err.message;
+        addMsg.classList.add("err");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    function listenAdminPhones() {
+      const q = query(collection(db, "phones"), orderBy("createdAt", "desc"));
+      onSnapshot(q, snap => {
+        if (snap.empty) {
+          adminList.innerHTML = `<p class="item-meta">No phones listed yet.</p>`;
+          return;
+        }
+        adminList.innerHTML = snap.docs.map(d => {
+          const p = d.data();
+          return `
+            <div class="item" data-id="${d.id}">
+              <div>
+                <strong>${p.model}</strong> — <span>$${p.price}</span>
+                <div class="item-meta">${p.condition || ""} • ${p.specs || ""}</div>
+              </div>
+              <div class="item-actions">
+                <select class="status-select" data-action="status">
+                  <option value="Available" ${p.status === "Available" ? "selected" : ""}>Available</option>
+                  <option value="Reserved" ${p.status === "Reserved" ? "selected" : ""}>Reserved</option>
+                  <option value="Sold" ${p.status === "Sold" ? "selected" : ""}>Sold</option>
+                </select>
+                <button class="secondary" data-action="price">Edit Price</button>
+                <button class="danger" data-action="delete">Delete</button>
+              </div>
+            </div>
+          `;
+        }).join("");
+      });
+    }
+
+    adminList.addEventListener("change", async e => {
+      const sel = e.target.closest('select[data-action="status"]');
+      if (!sel) return;
+      const id = sel.closest(".item").dataset.id;
+      await updateDoc(doc(db, "phones", id), { status: sel.value });
+    });
+
+    adminList.addEventListener("click", async e => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const item = btn.closest(".item");
+      const id = item.dataset.id;
+      const action = btn.dataset.action;
+
+      if (action === "delete") {
+        if (confirm("Delete this phone unit?")) {
+          await deleteDoc(doc(db, "phones", id));
+        }
+      } else if (action === "price") {
+        const nextPrice = prompt("Enter new price (USD):");
+        if (nextPrice !== null && nextPrice.trim() !== "" && !Number.isNaN(Number(nextPrice))) {
+          await updateDoc(doc(db, "phones", id), { price: Number(nextPrice) });
+        }
+      }
+    });
+
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        loginPanel.classList.add("hidden");
+        dashPanel.classList.remove("hidden");
+        logoutBtn.classList.remove("hidden");
+        listenAdminPhones();
+      } else {
+        loginPanel.classList.remove("hidden");
+        dashPanel.classList.add("hidden");
+        logoutBtn.classList.add("hidden");
+      }
+    });
+  </script>
+</body>
+</html>
