@@ -12,11 +12,12 @@
       --text: #f3f5f8;
       --muted: #9aa2b1;
       --accent: #3b82f6;
+      --gold: #f59e0b;
       --danger: #ef4444;
       --border: #2a303d;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 20px; max-width: 860px; margin: 0 auto; }
+    body { background: var(--bg); color: var(--text); padding: 20px; max-width: 880px; margin: 0 auto; }
     header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
     a { color: #60a5fa; text-decoration: none; font-size: 0.9rem; }
 
@@ -25,19 +26,28 @@
     .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
     label { font-size: 0.85rem; color: var(--muted); }
-    input, select, textarea { background: var(--input); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.92rem; }
+    input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
+      background: var(--input); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.92rem;
+    }
     textarea { min-height: 80px; resize: vertical; }
 
-    button { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+    .check-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 12px; background: var(--input); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+    .check-row input { width: 18px; height: 18px; accent-color: var(--gold); }
+    .check-row span { font-size: 0.9rem; color: var(--text); }
+
+    button { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 600; cursor: pointer; font-size: 0.88rem; }
     button.secondary { background: #262c3a; color: var(--text); }
+    button.promo-active { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); }
     button.danger { background: var(--danger); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .preview-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .preview-row img { width: 76px; height: 76px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
 
-    .item { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
-    .item-meta { font-size: 0.85rem; color: var(--muted); margin-top: 3px; }
+    .item { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+    .item-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pin-tag { font-size: 0.74rem; padding: 2px 8px; border-radius: 999px; background: rgba(245,158,11,0.18); color: #fbbf24; border: 1px solid rgba(245,158,11,0.45); }
+    .item-meta { font-size: 0.84rem; color: var(--muted); margin-top: 4px; }
     .item-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .status-select { padding: 7px 10px; font-size: 0.84rem; }
     .msg { margin-top: 10px; font-size: 0.88rem; color: #34d399; }
@@ -54,7 +64,6 @@
     <button id="logoutBtn" class="secondary hidden">Log out</button>
   </header>
 
-  <!-- Login Box -->
   <section id="loginPanel" class="panel">
     <h2>Sign In</h2>
     <form id="loginForm">
@@ -71,7 +80,6 @@
     </form>
   </section>
 
-  <!-- Dashboard -->
   <section id="dashPanel" class="hidden">
     <div class="panel">
       <h2>Add Phone Unit</h2>
@@ -108,6 +116,11 @@
           <input id="ownerWaInput" type="text" placeholder="e.g. 96170123456 or 70123456" />
         </div>
 
+        <label class="check-row">
+          <input id="featuredInput" type="checkbox" />
+          <span>★ Promote / Pin to top of storefront (ترويج في أول الصفحة)</span>
+        </label>
+
         <div class="field">
           <label>Honest Notes / Issues / Repairs</label>
           <textarea id="notesInput" placeholder="Small scuff on bottom-left frame, True Tone working, no parts replaced..."></textarea>
@@ -125,7 +138,7 @@
     </div>
 
     <div class="panel">
-      <h2>Manage Units</h2>
+      <h2>Manage & Promote Units</h2>
       <div id="adminList">Loading...</div>
     </div>
   </section>
@@ -148,6 +161,7 @@
 
     const addPhoneForm = document.getElementById("addPhoneForm");
     const ownerWaInput = document.getElementById("ownerWaInput");
+    const featuredInput = document.getElementById("featuredInput");
     const photosInput = document.getElementById("photosInput");
     const previewRow = document.getElementById("previewRow");
     const saveBtn = document.getElementById("saveBtn");
@@ -224,6 +238,7 @@
           specs: specsInput.value.trim(),
           notes: notesInput.value.trim(),
           ownerWhatsapp: normalizeWaNumber(ownerWaInput.value),
+          featured: featuredInput.checked,
           status: "Available",
           photos: compressedPhotos,
           createdAt: serverTimestamp()
@@ -247,22 +262,31 @@
           adminList.innerHTML = `<p class="item-meta">No phones listed yet.</p>`;
           return;
         }
-        adminList.innerHTML = snap.docs.map(d => {
-          const p = d.data();
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        docs.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
+
+        adminList.innerHTML = docs.map(p => {
           const waLabel = p.ownerWhatsapp ? `Owner WA: ${p.ownerWhatsapp}` : "Owner WA: Default (03447482)";
+          const isFeatured = Boolean(p.featured);
           return `
-            <div class="item" data-id="${d.id}">
+            <div class="item" data-id="${p.id}" data-featured="${isFeatured}">
               <div>
-                <strong>${p.model}</strong> — <span>$${p.price}</span>
+                <div class="item-title">
+                  <strong>${p.model}</strong> — <span>$${p.price}</span>
+                  ${isFeatured ? `<span class="pin-tag">★ Featured</span>` : ""}
+                </div>
                 <div class="item-meta">${p.condition || ""} • ${p.specs || ""} • ${waLabel}</div>
               </div>
               <div class="item-actions">
+                <button class="${isFeatured ? "promo-active" : "secondary"}" data-action="promote">
+                  ${isFeatured ? "★ Pinned" : "☆ Promote"}
+                </button>
                 <select class="status-select" data-action="status">
                   <option value="Available" ${p.status === "Available" ? "selected" : ""}>Available</option>
                   <option value="Reserved" ${p.status === "Reserved" ? "selected" : ""}>Reserved</option>
                   <option value="Sold" ${p.status === "Sold" ? "selected" : ""}>Sold</option>
                 </select>
-                <button class="secondary" data-action="price">Edit Price</button>
+                <button class="secondary" data-action="price">Price</button>
                 <button class="danger" data-action="delete">Delete</button>
               </div>
             </div>
@@ -285,7 +309,10 @@
       const id = item.dataset.id;
       const action = btn.dataset.action;
 
-      if (action === "delete") {
+      if (action === "promote") {
+        const current = item.dataset.featured === "true";
+        await updateDoc(doc(db, "phones", id), { featured: !current });
+      } else if (action === "delete") {
         if (confirm("Delete this phone unit?")) {
           await deleteDoc(doc(db, "phones", id));
         }
